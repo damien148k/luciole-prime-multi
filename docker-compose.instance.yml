@@ -22,6 +22,8 @@ services:
       - qdrant_storage:/qdrant/storage
     ports:
       - 127.0.0.1:${QDRANT_PORT:-6333}:6333
+    networks:
+      - instance_net
     logging:
       driver: json-file
       options:
@@ -41,6 +43,8 @@ services:
       - opensearch_data:/usr/share/opensearch/data
     ports:
       - 127.0.0.1:${OPENSEARCH_PORT:-9200}:9200
+    networks:
+      - instance_net
     logging:
       driver: json-file
       options:
