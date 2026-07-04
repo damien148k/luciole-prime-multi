@@ -476,6 +476,32 @@ curl -s http://localhost:8000/health
 curl -s http://localhost:8006/status
 ```
 
+### Création du compte GreenMail (service mail)
+
+Après le démarrage des containers, créer le compte mail local utilisé par Luciole :
+
+```bash
+# Remplacer <INSTANCE_NAME> par le nom de l'instance (ex: support, chavenay...)
+curl -s -X POST http://localhost:${GREENMAIL_ADMIN_PORT:-8019}/api/user \
+  -H "Content-Type: application/json" \
+  -d '{"email":"luciole@luciole.local","login":"luciole","password":"luciole"}'
+# Réponse attendue : {"login":"luciole","email":"luciole@luciole.local"}
+```
+
+Puis configurer le client mail externe (Outlook, Thunderbird...) :
+
+| Paramètre | Valeur |
+|---|---|
+| Email | `luciole@luciole.local` |
+| Login | `luciole` |
+| Mot de passe | `luciole` |
+| IMAP host | `<IP_GX10>` |
+| IMAP port | `${MAIL_IMAP_PORT:-8018}` — **sans chiffrement** |
+| SMTP host | `<IP_GX10>` |
+| SMTP port | `${MAIL_SMTP_PORT:-8017}` — **sans chiffrement** |
+
+> **Note** : le compte GreenMail est recréé à chaque suppression du container `luciole-mail-<instance>`. À refaire après un `docker rm`.
+
 ### Ingestion d'un document test
 
 Copier un fichier PDF ou DOCX dans `instances/chavenay/data/chavenay/` :
