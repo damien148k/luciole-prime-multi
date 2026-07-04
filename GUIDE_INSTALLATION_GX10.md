@@ -216,6 +216,11 @@ Le résultat attendu : `Login Succeeded`
 
 ## 6. Cloner le repo luciole-prime-multi
 
+> **Réinstallation from scratch** : si le dossier existe déjà (appartenant à root après une ancienne installation), le supprimer d'abord :
+> ```bash
+> sudo rm -rf ~/Documents/luciole-prime-multi
+> ```
+
 ```bash
 cd ~/Documents
 git clone git@github.com:damien148k/luciole-prime-multi.git
