@@ -20,7 +20,7 @@
 9. [Build de l'image Docker GPU arm64](#9-build-de-limage-docker-gpu-arm64)
 10. [Démarrage du stack LLM partagé](#10-démarrage-du-stack-llm-partagé)
 11. [Installation d'une instance métier](#11-installation-dune-instance-métier)
-12. [Vérification finale](#12-vérification-finale)
+12. [Vérification finale et tests](#12-vérification-finale-et-tests)
 13. [Gestion des instances](#13-gestion-des-instances)
 14. [Erreurs courantes et solutions](#14-erreurs-courantes-et-solutions)
 
@@ -42,6 +42,25 @@ uname -m          # doit afficher : aarch64
 cat /etc/os-release
 ```
 
+### Accès distant depuis un autre PC (SSH)
+
+Pour travailler depuis un PC Windows/Mac sans être physiquement sur le GX10 :
+
+```bash
+# Sur le GX10 — activer SSH
+sudo systemctl enable ssh --now
+
+# Depuis le PC distant (PowerShell / Terminal)
+ssh dam@<IP_GX10>
+```
+
+Trouver l'IP du GX10 :
+
+```bash
+ip addr show | grep "192.168"
+# ex : 192.168.1.14
+```
+
 ---
 
 ## 2. Docker — permissions et groupe
@@ -52,7 +71,7 @@ cat /etc/os-release
 permission denied while trying to connect to the Docker API at unix:///var/run/docker.sock
 ```
 
-> **Cause** : l'utilisateur `dam` n'appartient pas au groupe `docker`. Le `chmod` sur un fichier `.tar` ne change rien à ce problème.
+> **Cause** : l'utilisateur `dam` n'appartient pas au groupe `docker`.
 
 ### Solution (permanente)
 
@@ -108,7 +127,6 @@ sudo docker info | grep -i runtime
 
 which nvidia-container-runtime
 # Doit retourner : /usr/bin/nvidia-container-runtime
-# (installé avec le NVIDIA Container Toolkit)
 ```
 
 ### Solution
@@ -150,29 +168,25 @@ Sur le portail NGC, lors de la génération d'une API key, le bandeau suivant ap
 API Access Restricted by your Organization.
 ```
 
-> **Cause** : le compte NVIDIA/NGC est rattaché à une organisation (compte pro ou entreprise)  
-> qui bloque la génération d'API key pour les utilisateurs individuels.
+> **Cause** : le compte NVIDIA/NGC est rattaché à une organisation qui bloque la génération d'API key.
 
 ### Solution
 
 Créer un compte NGC **personnel** séparé, non rattaché à une organisation.
 
 1. Aller sur [https://ngc.nvidia.com](https://ngc.nvidia.com)
-2. Se connecter ou créer un **nouveau compte personnel** avec une adresse email personnelle (ex: Gmail, etc.)
+2. Se connecter ou créer un **nouveau compte personnel** avec une adresse email personnelle (ex: Gmail)
 3. S'assurer que ce compte n'est lié à **aucune organisation**
 4. Dans le menu du compte : **Setup → Generate API Key → + Generate Personal Key**
 5. Copier la clé générée et la stocker dans un gestionnaire de mots de passe — **elle ne s'affiche qu'une seule fois**
 
 ---
 
-## 4. Login Docker sur nvcr.io
+## 5. Login Docker sur nvcr.io
 
 ### Problème rencontré
 
 ```
-$ docker login nvcr.io
-Username: contact@148kprod.com
-Password: ****
 Get "https://nvcr.io/v2/": unauthorized
 ```
 
@@ -190,30 +204,27 @@ sudo docker login nvcr.io --username '$oauthtoken'
 > **Attention** : utiliser des guillemets simples autour de `$oauthtoken` pour  
 > éviter que le shell l'interprète comme une variable vide.
 
-Alternativement, avec la clé en variable d'environnement :
-
-```bash
-export NGC_API_KEY="<TA_CLE_API_NGC>"
-echo "$NGC_API_KEY" | sudo docker login nvcr.io \
-  --username '$oauthtoken' \
-  --password-stdin
-```
-
 Le résultat attendu : `Login Succeeded`
 
-> **Note** : si `docker login` réussit sans `sudo` mais échoue avec `sudo`, c'est que  
-> les credentials sont stockés dans le contexte de l'utilisateur, pas de root.  
-> Utiliser systématiquement `sudo docker login` pour que `sudo docker pull` fonctionne.
+> **Note** : utiliser systématiquement `sudo docker login` pour que `sudo docker pull` fonctionne.
 
 ---
 
-## 5. Cloner le repo luciole-prime-multi
+## 6. Cloner le repo luciole-prime-multi
 
 ```bash
 cd ~/Documents
 git clone git@github.com:damien148k/luciole-prime-multi.git
 cd luciole-prime-multi
 ```
+
+> **Prérequis** : la clé SSH du GX10 doit être ajoutée sur GitHub.  
+> Si ce n'est pas fait :
+> ```bash
+> ssh-keygen -t ed25519 -C "gx10-ca25"
+> cat ~/.ssh/id_ed25519.pub
+> # Copier la clé → GitHub → Settings → SSH Keys → New SSH Key
+> ```
 
 Structure du repo :
 
@@ -227,48 +238,43 @@ luciole-prime-multi/
 ├── rag-system/                         # Code Python (agent, chat, admin, watcher, mail)
 ├── config/                             # Configuration YAML
 ├── scripts/
-│   ├── install_gx10.sh                 # Installeur interactif (lancer en premier)
-│   ├── stop_instance.sh                # Arrêter une instance
-│   ├── list_instances.sh               # Lister toutes les instances
+│   ├── install_gx10.sh                 # Installeur interactif
+│   ├── prepare_gx10.sh                 # Prépare embeddings + CUTLASS config
+│   ├── download_model.sh               # Télécharge le modèle LLM
 │   ├── trt_entrypoint.gx10.sh         # Entrypoint TRT-LLM GX10
-│   ├── prepare_gx10.sh                 # Prépare dossiers + CUTLASS config
-│   └── download_model.sh               # Télécharge le modèle LLM
-├── instances/                          # Créé par install_gx10.sh (une sous-dossier par métier)
+│   ├── stop_instance.sh
+│   └── list_instances.sh
+├── instances/                          # Créé par install_gx10.sh
 │   └── <metier>/
 │       ├── .env
-│       ├── data/
+│       ├── data/                       # Documents à ingérer
 │       ├── config/
-│       └── models/ -> ../../models/    # Lien symbolique vers embeddings partagés
+│       └── feedbacks/
 ├── models/
-│   └── huggingface/                    # Embeddings partagés entre toutes les instances
-├── .env.template                       # Template de variables d'environnement
+│   ├── huggingface/                    # Embeddings partagés (bge-m3, bge-reranker-v2-m3)
+│   └── hf_models/                     # Modèle LLM (Qwen3-30B-A3B-NVFP4)
 └── README.md
 ```
 
 ---
 
-## 6. Téléchargement des embeddings (venv Python)
+## 7. Téléchargement des embeddings (venv Python)
 
 ### Problème rencontré
 
 ```
 error: externally-managed-environment
-× This environment is externally managed
 ```
 
-> **Cause** : sur Debian/Ubuntu récents (PEP 668), `pip install` en système est bloqué  
-> pour éviter de casser les paquets `apt`. Lancer `sudo bash download_model.sh` sans venv active  
-> ce blocage, même avec `sudo`.
+> **Cause** : sur Debian/Ubuntu récents (PEP 668), `pip install` système est bloqué.  
+> Le script utilise un venv Python dédié pour contourner ce blocage.
 
-### Solution : utiliser le venv dédié
-
-Le script `prepare_gx10.sh` gère la création du venv et le téléchargement des embeddings.  
-Ne **pas** utiliser `sudo pip install` ni `pip install --break-system-packages`.
+### Solution
 
 ```bash
 cd ~/Documents/luciole-prime-multi
 
-# Exécuter avec sudo bash (chemin explicite obligatoire — sudo ne trouve pas les scripts dans $PWD)
+# Exécuter avec sudo bash (chemin explicite obligatoire)
 sudo bash scripts/prepare_gx10.sh
 ```
 
@@ -279,12 +285,12 @@ Ce script :
 - Crée le dossier `models/huggingface/` pour les embeddings partagés
 - Crée un venv Python dans `~/luciole-venv/` si absent
 - Télécharge `bge-m3` et `bge-reranker-v2-m3` depuis HuggingFace
-- Configure le fichier `extra-llm-api-config.yml` avec `moe_config: backend: CUTLASS`
+- Configure `extra-llm-api-config.yml` avec `moe_config: backend: CUTLASS`
 - Ajuste les permissions (`chown`)
 
 ---
 
-## 7. Téléchargement du modèle LLM (Qwen3-30B-A3B-NVFP4)
+## 8. Téléchargement du modèle LLM (Qwen3-30B-A3B-NVFP4)
 
 Le modèle est téléchargé depuis HuggingFace dans `models/hf_models/`.  
 Il est **partagé entre toutes les instances** — ne télécharger qu'une seule fois.
@@ -304,10 +310,10 @@ bash scripts/download_model.sh
 
 ---
 
-## 8. Build de l'image Docker GPU arm64
+## 9. Build de l'image Docker GPU arm64
 
 L'image `luciole-gpu:arm64` est buildée nativement sur le GX10.  
-Elle est partagée par toutes les instances (qdrant, opensearch, agent, chat, admin, feedback, watcher, mail sont des images standard — seul `luciole-gpu:arm64` est buildé localement).
+Elle contient tout le code Python RAG et est partagée par toutes les instances.
 
 ```bash
 cd ~/Documents/luciole-prime-multi
@@ -316,15 +322,18 @@ cd ~/Documents/luciole-prime-multi
 sudo docker build -f Dockerfile.gpu.arm64 -t luciole-gpu:arm64 .
 ```
 
-> **Note rebuild** : pour forcer un rebuild complet sans cache :  
+> **Quand rebuilder** : uniquement si du code Python dans `rag-system/src/` a été modifié  
+> ou si `requirements-linux-gpu.txt` a changé. Les modifications de `docker-compose*.yml`  
+> ou de scripts ne nécessitent **pas** de rebuild.
+
+> **Rebuild forcé** (sans cache) :  
 > `sudo docker build --no-cache -f Dockerfile.gpu.arm64 -t luciole-gpu:arm64 .`
 
 ---
 
-## 9. Démarrage du stack LLM partagé
+## 10. Démarrage du stack LLM partagé
 
-Le LLM TRT-LLM est démarré **une seule fois** et reste actif pour toutes les instances.  
-Ne pas le redémarrer entre les installations d'instances métier.
+Le LLM TRT-LLM est démarré **une seule fois** et reste actif pour toutes les instances.
 
 ```bash
 cd ~/Documents/luciole-prime-multi
@@ -333,13 +342,6 @@ sudo docker compose \
   -f docker-compose.shared-llm.yml \
   -f docker-compose.shared-llm.gx10.yml \
   up -d
-```
-
-Vérifier que le container est en cours de démarrage :
-
-```bash
-sudo docker ps | grep tensorrt
-# luciole-tensorrt-shared   starting (le démarrage prend 5-10 minutes)
 ```
 
 Surveiller les logs :
@@ -351,16 +353,13 @@ sudo docker logs -f luciole-tensorrt-shared
 Le modèle est prêt quand les logs affichent :
 
 ```
-Starting Triton Server...
-I ... Started GRPCInferenceService...
-I ... Started HTTPService...
+Started HTTPService...
 ```
 
-Vérification via l'API :
+Vérification :
 
 ```bash
 curl -s http://localhost:8001/v1/models | python3 -m json.tool
-# Doit retourner la liste des modèles disponibles
 ```
 
 > **Note** : le healthcheck est configuré avec `start_period: 600s` — Docker affichera  
@@ -368,9 +367,9 @@ curl -s http://localhost:8001/v1/models | python3 -m json.tool
 
 ---
 
-## 10. Installation d'une instance métier
+## 11. Installation d'une instance métier
 
-Une fois le stack LLM partagé démarré et healthy, installer la première instance métier.
+Une fois le stack LLM partagé démarré et healthy :
 
 ```bash
 cd ~/Documents/luciole-prime-multi
@@ -381,77 +380,68 @@ sudo bash scripts/install_gx10.sh
 Le script est interactif :
 
 ```
-════════════════════════════════════════════════════════════
-   Luciole — Installation d'une nouvelle instance métier
-════════════════════════════════════════════════════════════
+Pour quel métier / client ? (ex: support, juridique, chavenay) : support
 
-Pour quel métier / client ? (ex: support, juridique, chavenay) : chavenay
-
-[INFO] Ports assignés à l'instance 'chavenay' :
-   API (agent)    : 8000
-   Admin UI       : 8001
-   Chat UI        : 8002
-   Feedback UI    : 8003
-   Qdrant         : 8004
-   OpenSearch     : 8005
-   Watcher        : 8006
-   Mail SMTP      : 8007
-   Mail IMAP      : 8008
-   Mail Admin     : 8009
-
-Confirmer l'installation ? (O/n) : O
+Ports assignés à l'instance 'support' :
+   API (agent)    : 8010
+   Admin UI       : 8011
+   Chat UI        : 8012
+   Feedback UI    : 8013
+   Qdrant         : 8014
+   OpenSearch     : 8015
+   Watcher        : 8016
+   Mail SMTP      : 8017
+   Mail IMAP      : 8018
+   Mail Admin     : 8019
 ```
 
 Le script :
 1. Valide que le réseau `luciole_shared` existe (LLM partagé actif)
 2. Détecte automatiquement les ports libres (blocs de 10 par instance)
-3. Crée `instances/chavenay/` avec les sous-dossiers data, config, feedbacks, backups
-4. Crée un lien symbolique vers les embeddings partagés (`models/huggingface/`)
-5. Génère `instances/chavenay/.env` avec tous les ports et la clé de chiffrement mail
-6. Lance le stack Docker de l'instance
+3. Crée `instances/<metier>/` avec les sous-dossiers data, config, feedbacks, backups
+4. Génère `instances/<metier>/.env` avec tous les ports et la clé de chiffrement mail
+5. Lance le stack Docker de l'instance avec `--profile gpu`
 
-Accès après installation :
+### Donner les droits sur le dossier data
 
+Le dossier `instances/<metier>/data/` est créé par Docker (root).  
+Il faut donner les droits à l'utilisateur pour pouvoir y déposer des documents :
+
+```bash
+sudo chown -R dam:dam ~/Documents/luciole-prime-multi/instances/<metier>/data/
 ```
-Chat UI    → http://localhost:8002
-Admin UI   → http://localhost:8001
-Feedback   → http://localhost:8003
-API        → http://localhost:8000
-```
 
-### Installation d'une deuxième instance
+### Installer une deuxième instance
 
-Relancer le script — il détecte automatiquement les ports déjà utilisés et assigne le bloc suivant :
+Relancer le script — il détecte automatiquement les ports déjà utilisés :
 
 ```bash
 sudo bash scripts/install_gx10.sh
-# Répondre : juridique
-# Ports auto-assignés : 8010-8019
+# Répondre : juridique → ports 8020-8029 auto-assignés
 ```
 
 ---
 
-## 11. Vérification finale
+## 12. Vérification finale et tests
 
-### Tous les containers
+### Vérifier tous les containers
 
 ```bash
 sudo docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
 ```
 
-Résultat attendu :
+Résultat attendu (exemple instance support, ports 8010-8019) :
 
 ```
-NAMES                           STATUS                    PORTS
-luciole-tensorrt-shared         Up X minutes (healthy)    127.0.0.1:8001->8000/tcp
-luciole-qdrant-chavenay         Up X minutes              127.0.0.1:8004->6333/tcp
-luciole-opensearch-chavenay     Up X minutes              127.0.0.1:8005->9200/tcp
-luciole-agent-chavenay          Up X minutes              0.0.0.0:8000->8000/tcp
-luciole-admin-chavenay          Up X minutes              0.0.0.0:8001->8080/tcp
-luciole-chat-chavenay           Up X minutes              0.0.0.0:8002->8501/tcp
-luciole-feedback-chavenay       Up X minutes              0.0.0.0:8003->8503/tcp
-luciole-watcher-chavenay        Up X minutes              127.0.0.1:8006->8090/tcp
-luciole-mail-chavenay           Up X minutes (healthy)    ...
+luciole-tensorrt-shared         Up X minutes (healthy)
+luciole-qdrant-support          Up X minutes
+luciole-opensearch-support      Up X minutes
+luciole-agent-support           Up X minutes
+luciole-admin-support           Up X minutes
+luciole-chat-support            Up X minutes
+luciole-feedback-support        Up X minutes
+luciole-watcher-support         Up X minutes
+luciole-mail-support            Up X minutes (healthy)
 ```
 
 ### Test du LLM partagé
@@ -466,29 +456,32 @@ curl -s http://localhost:8001/v1/chat/completions \
 ### Test de l'API RAG
 
 ```bash
-curl -s http://localhost:8000/health
-# {"status": "ok", "instance": "chavenay"}
+curl -s http://localhost:8010/health
+# {"status": "ok", "instance": "support"}
 ```
 
-### Test du watcher
+### Accès aux interfaces (local ou réseau)
 
-```bash
-curl -s http://localhost:8006/status
-```
+| Interface | URL locale | URL réseau |
+|---|---|---|
+| Chat UI | `http://localhost:8012` | `http://<IP_GX10>:8012` |
+| Admin UI | `http://localhost:8011` | `http://<IP_GX10>:8011` |
+| Feedback / Mail | `http://localhost:8013` | `http://<IP_GX10>:8013` |
 
 ### Création du compte GreenMail (service mail)
 
-Après le démarrage des containers, créer le compte mail local utilisé par Luciole :
+Après le démarrage des containers, créer le compte mail local utilisé par Luciole.  
+Récupérer le port admin GreenMail depuis le `.env` de l'instance :
 
 ```bash
-# Remplacer <INSTANCE_NAME> par le nom de l'instance (ex: support, chavenay...)
-curl -s -X POST http://localhost:${GREENMAIL_ADMIN_PORT:-8019}/api/user \
+source ~/Documents/luciole-prime-multi/instances/<metier>/.env
+curl -s -X POST http://localhost:${MAIL_ADMIN_PORT}/api/user \
   -H "Content-Type: application/json" \
   -d '{"email":"luciole@luciole.local","login":"luciole","password":"luciole"}'
 # Réponse attendue : {"login":"luciole","email":"luciole@luciole.local"}
 ```
 
-Puis configurer le client mail externe (Outlook, Thunderbird...) :
+Configurer le client mail externe (Outlook, Thunderbird...) :
 
 | Paramètre | Valeur |
 |---|---|
@@ -496,30 +489,35 @@ Puis configurer le client mail externe (Outlook, Thunderbird...) :
 | Login | `luciole` |
 | Mot de passe | `luciole` |
 | IMAP host | `<IP_GX10>` |
-| IMAP port | `${MAIL_IMAP_PORT:-8018}` — **sans chiffrement** |
+| IMAP port | `MAIL_IMAP_PORT` (ex: 8018) — **sans chiffrement** |
 | SMTP host | `<IP_GX10>` |
-| SMTP port | `${MAIL_SMTP_PORT:-8017}` — **sans chiffrement** |
+| SMTP port | `MAIL_SMTP_PORT` (ex: 8017) — **sans chiffrement** |
 
-> **Note** : le compte GreenMail est recréé à chaque suppression du container `luciole-mail-<instance>`. À refaire après un `docker rm`.
+Configurer aussi IMAP/SMTP dans l'UI Feedback → Settings mail (même valeurs, host = `mail`).
 
-### Ingestion d'un document test
+> **Note** : le compte GreenMail est perdu à chaque `docker rm` du container mail. À recréer après chaque recréation du container.
 
-Copier un fichier PDF ou DOCX dans `instances/chavenay/data/chavenay/` :
+### Ingestion de documents
 
-```bash
-cp /path/to/document.pdf instances/chavenay/data/chavenay/
-# Le watcher détecte le fichier et lance l'indexation automatiquement
-```
-
-Vérifier l'indexation dans les logs du watcher :
+Déposer les documents dans le dossier de l'instance :
 
 ```bash
-sudo docker logs -f luciole-watcher-chavenay
+# Le dossier doit porter le même nom que l'instance (INSTANCE_NAME)
+mkdir -p ~/Documents/luciole-prime-multi/instances/<metier>/data/<metier>/
+cp /path/to/documents/*.pdf \
+   ~/Documents/luciole-prime-multi/instances/<metier>/data/<metier>/
 ```
+
+> **Important** : le nom du sous-dossier doit être identique au nom du métier (ex: `support/data/support/`).  
+> C'est ce nom qui détermine l'index Qdrant utilisé par l'agent.
+
+Depuis l'UI Admin, lancer l'ingestion avec le chemin `/app/data/<metier>`.
+
+Le watcher surveille automatiquement les changements (ajout/suppression) toutes les **60 secondes**.
 
 ---
 
-## 12. Gestion des instances
+## 13. Gestion des instances
 
 ### Lister les instances
 
@@ -530,7 +528,7 @@ sudo bash scripts/list_instances.sh
 ### Arrêter une instance
 
 ```bash
-sudo bash scripts/stop_instance.sh chavenay
+sudo bash scripts/stop_instance.sh support
 ```
 
 ### Arrêter le stack LLM partagé
@@ -545,16 +543,32 @@ sudo docker compose \
   down
 ```
 
-### Redémarrer une instance (rebuild image)
+### Recréer un ou plusieurs containers
 
 ```bash
-# Toujours stop + rm + up — ne pas utiliser --force-recreate seul (garde l'ancienne image)
-# IMPORTANT : toujours inclure --profile gpu sinon les services GPU démarrent sur un réseau séparé
-sudo docker stop luciole-agent-chavenay && sudo docker rm luciole-agent-chavenay
-cd instances/chavenay
+# IMPORTANT : toujours inclure --profile gpu
+# sinon les services GPU démarrent sur un réseau séparé (DNS failure)
+cd ~/Documents/luciole-prime-multi/instances/<metier>
+sudo docker stop luciole-<service>-<metier> && sudo docker rm luciole-<service>-<metier>
 sudo docker compose -f docker-compose.yml -f docker-compose.gx10.yml \
-  --project-name luciole-chavenay --profile gpu up -d
+  --project-name luciole-<metier> --profile gpu up -d
 ```
+
+### Recréer TOUS les containers d'une instance
+
+```bash
+cd ~/Documents/luciole-prime-multi/instances/<metier>
+sudo docker stop luciole-qdrant-<metier> luciole-opensearch-<metier> \
+  luciole-agent-<metier> luciole-admin-<metier> luciole-chat-<metier> \
+  luciole-feedback-<metier> luciole-watcher-<metier> luciole-mail-<metier>
+sudo docker rm luciole-qdrant-<metier> luciole-opensearch-<metier> \
+  luciole-agent-<metier> luciole-admin-<metier> luciole-chat-<metier> \
+  luciole-feedback-<metier> luciole-watcher-<metier> luciole-mail-<metier>
+sudo docker compose -f docker-compose.yml -f docker-compose.gx10.yml \
+  --project-name luciole-<metier> --profile gpu up -d
+```
+
+> Ne pas oublier de recréer le compte GreenMail après (voir section 12).
 
 ### Mettre à jour le code (git pull + rebuild)
 
@@ -562,85 +576,96 @@ sudo docker compose -f docker-compose.yml -f docker-compose.gx10.yml \
 cd ~/Documents/luciole-prime-multi
 git pull
 
-# Rebuild image
-sudo docker build --no-cache -f Dockerfile.gpu.arm64 -t luciole-gpu:arm64 .
+# Rebuild image (uniquement si code Python modifié)
+sudo docker build -f Dockerfile.gpu.arm64 -t luciole-gpu:arm64 .
 
-# Recréer les containers de chaque instance
-sudo bash scripts/stop_instance.sh chavenay
-sudo bash scripts/install_gx10.sh  # choisir 'chavenay' → reconfigurer
-```
-
----
-
-## 13. Erreurs courantes et solutions
-
-### `permission denied while trying to connect to the Docker API`
-
-```bash
-sudo usermod -aG docker $USER
-newgrp docker          # ou redémarrer la machine
-```
-
-### `sudo: download_model.sh: commande introuvable`
-
-`sudo` ne cherche pas dans le répertoire courant.  
-Toujours utiliser `sudo bash scripts/<nom>.sh` avec le chemin explicite.
-
-### `Get "https://nvcr.io/v2/": unauthorized`
-
-Deux causes possibles :
-1. Mauvais couple username/password → utiliser `$oauthtoken` (littéral) comme username
-2. Compte NGC rattaché à une organisation qui bloque les API keys → créer un compte NGC personnel
-
-### `error: externally-managed-environment` (pip)
-
-Ne pas utiliser `sudo pip install`. Utiliser le venv :
-
-```bash
-source ~/luciole-venv/bin/activate
-pip install <package>
-```
-
-### `--force-recreate` garde l'ancienne image
-
-`--force-recreate` recrée le container mais réutilise l'image en cache.  
-Pour forcer l'utilisation d'une nouvelle image :
-
-```bash
-sudo docker stop <container> && sudo docker rm <container>
-# puis relancer — TOUJOURS avec --profile gpu
+# Recréer les containers GPU (pas qdrant/opensearch/mail)
 cd instances/<metier>
+sudo docker stop luciole-agent-<metier> luciole-admin-<metier> \
+  luciole-chat-<metier> luciole-feedback-<metier> luciole-watcher-<metier>
+sudo docker rm luciole-agent-<metier> luciole-admin-<metier> \
+  luciole-chat-<metier> luciole-feedback-<metier> luciole-watcher-<metier>
 sudo docker compose -f docker-compose.yml -f docker-compose.gx10.yml \
   --project-name luciole-<metier> --profile gpu up -d
 ```
 
-### Le LLM partagé répond `connection refused` depuis une instance
+---
 
-Vérifier que le container `luciole-tensorrt-shared` est sur le réseau `luciole_shared` :
+## 14. Erreurs courantes et solutions
+
+### `permission denied while trying to connect to the Docker API`
 
 ```bash
-sudo docker network inspect luciole_shared
+sudo usermod -aG docker $USER && newgrp docker
 ```
 
-Le container de l'instance doit aussi être sur ce réseau — vérifier dans `docker-compose.instance.yml`.
+### `sudo: download_model.sh: commande introuvable`
 
-### `_resolve_index_name: 'chavenay' reçu mais ignoré — force 'luciole'`
+Toujours utiliser `sudo bash scripts/<nom>.sh` avec le chemin explicite.
 
-Variable `MULTI_INDEX_MODE=true` manquante dans le `.env` de l'instance.  
-Le fichier `.env` généré par `install_gx10.sh` ne contient pas encore cette variable.  
-L'ajouter manuellement :
+### `Get "https://nvcr.io/v2/": unauthorized`
 
+Utiliser `$oauthtoken` (littéral) comme username, avec des guillemets simples :
 ```bash
-echo "MULTI_INDEX_MODE=true" >> instances/chavenay/.env
-# puis redémarrer l'instance (stop/rm/up)
+sudo docker login nvcr.io --username '$oauthtoken'
 ```
 
-### Healthcheck mail en échec (`nc` ou `curl` absents dans l'image GreenMail)
+### `error: externally-managed-environment` (pip)
 
-Le healthcheck utilise `/dev/tcp` (bash built-in) :
+Ne pas utiliser `sudo pip install`. Passer par le venv :
+```bash
+source ~/luciole-venv/bin/activate && pip install <package>
+```
+
+### `libcuda.so.1: cannot open shared object file`
+
+Le runtime Docker n'est pas nvidia. Vérifier et corriger (voir section 3) :
+```bash
+sudo docker info | grep "Default Runtime"
+# Si runc → appliquer daemon.json
+```
+
+### `Temporary failure in name resolution` (DNS Docker)
+
+Les containers ne sont pas tous sur le même réseau Docker.  
+**Cause** : commande `docker compose up` lancée sans `--profile gpu` ou sans `--project-name`.  
+**Solution** : recréer tous les containers ensemble (voir "Recréer TOUS les containers").
+
+### `--force-recreate` garde l'ancienne image
+
+`--force-recreate` recrée le container mais réutilise l'image en cache.  
+Toujours faire `docker stop + docker rm` puis `up -d --profile gpu`.
+
+### Modèle BAAI/bge-m3 non trouvé
+
+Vérifier que `HF_MODELS_PATH` est dans le `.env` de l'instance :
+```bash
+grep HF_MODELS_PATH ~/Documents/luciole-prime-multi/instances/<metier>/.env
+# Si absent :
+echo "HF_MODELS_PATH=/home/dam/Documents/luciole-prime-multi/models/huggingface" \
+  >> ~/Documents/luciole-prime-multi/instances/<metier>/.env
+# Puis recréer les containers GPU
+```
+
+### Index Qdrant vide (0 résultats au chat)
+
+Le nom du dossier source ≠ nom de l'instance.  
+Le dossier doit s'appeler exactement comme le métier : `data/<metier>/`.
+
+### Compte GreenMail perdu après `docker rm`
+
+Recréer le compte :
+```bash
+source ~/Documents/luciole-prime-multi/instances/<metier>/.env
+curl -s -X POST http://localhost:${MAIL_ADMIN_PORT}/api/user \
+  -H "Content-Type: application/json" \
+  -d '{"email":"luciole@luciole.local","login":"luciole","password":"luciole"}'
+```
+
+### Permission refusée sur `instances/<metier>/data/`
 
 ```bash
-bash -c 'echo > /dev/tcp/localhost/3025'
+sudo chown -R dam:dam ~/Documents/luciole-prime-multi/instances/<metier>/data/
 ```
 
 ---
@@ -649,20 +674,27 @@ bash -c 'echo > /dev/tcp/localhost/3025'
 
 ```
 1.  sudo apt update && upgrade → reboot
-2.  sudo usermod -aG docker $USER → newgrp docker
-3.  Configurer NVIDIA Container Runtime → sudo tee /etc/docker/daemon.json → sudo systemctl restart docker
-4.  Créer compte NGC personnel → générer API key
-5.  sudo docker login nvcr.io --username '$oauthtoken'
-6.  git clone luciole-prime-multi
-7.  sudo bash scripts/prepare_gx10.sh    ← embeddings + CUTLASS config
-8.  source ~/luciole-venv/bin/activate && bash scripts/download_model.sh  ← modèle LLM
-9.  sudo docker build -f Dockerfile.gpu.arm64 -t luciole-gpu:arm64 .
-10. sudo docker compose -f docker-compose.shared-llm.yml -f docker-compose.shared-llm.gx10.yml up -d
-11. (attendre que tensorrt-shared soit healthy)
-12. sudo bash scripts/install_gx10.sh  ← première instance métier
-13. Vérification : docker ps, curl /health, ingestion document test
+2.  sudo systemctl enable ssh --now   ← accès distant
+3.  sudo usermod -aG docker $USER → newgrp docker
+4.  Configurer NVIDIA Container Runtime → daemon.json → sudo systemctl restart docker
+5.  Créer compte NGC personnel → générer API key
+6.  sudo docker login nvcr.io --username '$oauthtoken'
+7.  git clone git@github.com:damien148k/luciole-prime-multi.git
+8.  sudo bash scripts/prepare_gx10.sh              ← embeddings + CUTLASS config
+9.  source ~/luciole-venv/bin/activate && bash scripts/download_model.sh  ← modèle LLM
+10. sudo docker build -f Dockerfile.gpu.arm64 -t luciole-gpu:arm64 .
+11. sudo docker compose -f docker-compose.shared-llm.yml \
+      -f docker-compose.shared-llm.gx10.yml up -d  ← LLM partagé
+12. (attendre que luciole-tensorrt-shared soit healthy — jusqu'à 10 min)
+13. sudo bash scripts/install_gx10.sh              ← première instance métier
+14. sudo chown -R dam:dam instances/<metier>/data/  ← droits sur le dossier data
+15. Créer compte GreenMail (curl POST /api/user)
+16. Configurer client mail externe (Outlook/Thunderbird)
+17. Déposer documents dans instances/<metier>/data/<metier>/
+18. Lancer ingestion depuis Admin UI → /app/data/<metier>
+19. Tester : Chat UI, watcher (ajout/suppression), mail entrant → brouillon
 ```
 
 ---
 
-*Guide généré le 2026-07-04 — basé sur les difficultés réelles rencontrées lors de l'installation initiale du GX10 (dam@gx10-ca25).*
+*Guide généré le 2026-07-04 — basé sur les difficultés réelles rencontrées lors de l'installation initiale du GX10 (dam@gx10-ca25). Tous les problèmes documentés ici ont été reproduits et résolus.*
