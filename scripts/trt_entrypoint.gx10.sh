@@ -36,11 +36,13 @@ echo "  GPU arch       : ${CUTE_DSL_ARCH:-sm_121a}"
 echo "============================================================"
 
 # ── Vérification GPU ──────────────────────────────────────────────────────────
-if ! command -v nvidia-smi &>/dev/null; then
-  echo "[ERREUR] nvidia-smi introuvable — GPU GB10 requis (NVIDIA Container Toolkit)."
-  exit 1
+# nvidia-smi n'est pas disponible dans l'image trtllm/release — on vérifie
+# uniquement que les capabilities GPU sont bien exposées via /dev/nvidia*
+if ls /dev/nvidia* &>/dev/null; then
+  echo "[INFO] GPU détecté via /dev/nvidia*"
+else
+  echo "[WARN] /dev/nvidia* absent — le GPU sera vérifié au démarrage de trtllm-serve."
 fi
-nvidia-smi --query-gpu=name,memory.total --format=csv,noheader || true
 
 # ── Vérification du checkpoint HF ─────────────────────────────────────────────
 if [[ ! -f "${MODEL_PATH}/config.json" ]]; then
