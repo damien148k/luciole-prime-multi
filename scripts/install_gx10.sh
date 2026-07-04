@@ -216,6 +216,9 @@ MAIL_ADMIN_PORT=$MAIL_ADMIN_PORT
 # Le TRT-LLM tourne dans le stack partagé sur le réseau luciole_shared
 LLM_URL=http://tensorrt-llm-shared:8000
 
+# ── Modèles partagés (embeddings) ───────────────────────────────────────────
+HF_MODELS_PATH=$ROOT_DIR/models/huggingface
+
 # ── Watcher ───────────────────────────────────────────────────────────────────
 WATCHER_ENABLED=true
 
