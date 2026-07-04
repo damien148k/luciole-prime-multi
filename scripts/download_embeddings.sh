@@ -29,11 +29,18 @@ echo "  Téléchargement modèles embedding/reranker — Luciole RAG"
 echo "  Cache : ${HF_CACHE}"
 echo "============================================================"
 
-# ── Prérequis : Python + huggingface_hub ─────────────────────────────────────
-if ! python3 -c "import huggingface_hub" 2>/dev/null; then
-    echo "[INFO] Installation de huggingface_hub..."
-    pip install --quiet huggingface_hub
+# ── Prérequis : Python + huggingface_hub (via venv — évite PEP 668) ──────────
+REAL_USER="${SUDO_USER:-$(whoami)}"
+VENV_PATH="/home/${REAL_USER}/luciole-venv"
+if [[ ! -f "${VENV_PATH}/bin/python3" ]]; then
+    echo "[INFO] Création du venv Python dans ${VENV_PATH}..."
+    sudo -u "${REAL_USER}" python3 -m venv "${VENV_PATH}"
 fi
+if ! "${VENV_PATH}/bin/python3" -c "import huggingface_hub" 2>/dev/null; then
+    echo "[INFO] Installation de huggingface_hub dans le venv..."
+    "${VENV_PATH}/bin/pip" install --quiet huggingface_hub
+fi
+PYTHON="${VENV_PATH}/bin/python3"
 
 # ── Création du dossier cache avec les bonnes permissions ────────────────────
 mkdir -p "${HF_CACHE}"
@@ -55,7 +62,7 @@ for REPO in "${MODELS[@]}"; do
     fi
 
     echo "[INFO] Téléchargement : ${REPO} → ${LOCAL_DIR}"
-    python3 - <<PYEOF
+    "${PYTHON}" - <<PYEOF
 from huggingface_hub import snapshot_download
 import warnings
 warnings.filterwarnings("ignore")
