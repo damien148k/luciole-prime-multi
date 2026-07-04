@@ -70,14 +70,20 @@ if [[ -f "${HF_DIR}/config.json" ]]; then
   echo "[OK] Modèle déjà présent : ${HF_DIR}"
 else
   echo "[INFO] Téléchargement de ${HF_REPO} (~18-20 Go)..."
-  if ! command -v hf &>/dev/null && ! python3 -c "import huggingface_hub" 2>/dev/null; then
-    echo "[INFO] Installation de huggingface_hub..."
-    pip install --quiet "huggingface_hub[hf_transfer]" || \
-      pipx install "huggingface_hub[cli]"
+  # Créer/réutiliser le venv dédié (évite PEP 668 / externally-managed-environment)
+  VENV_PATH="/home/${REAL_USER}/luciole-venv"
+  if [[ ! -f "${VENV_PATH}/bin/python3" ]]; then
+    echo "[INFO] Création du venv Python dans ${VENV_PATH}..."
+    sudo -u "${REAL_USER}" python3 -m venv "${VENV_PATH}"
   fi
+  if ! "${VENV_PATH}/bin/python3" -c "import huggingface_hub" 2>/dev/null; then
+    echo "[INFO] Installation de huggingface_hub dans le venv..."
+    "${VENV_PATH}/bin/pip" install --quiet "huggingface_hub[hf_transfer]"
+  fi
+  PYTHON="${VENV_PATH}/bin/python3"
   export HF_HUB_ENABLE_HF_TRANSFER=1
   mkdir -p "${HF_DIR}"
-  python3 - <<PY
+  "${PYTHON}" - <<PY
 import os
 from huggingface_hub import snapshot_download
 kw = dict(repo_id="${HF_REPO}", local_dir="${HF_DIR}", resume_download=True)
@@ -98,18 +104,15 @@ fi
 
 # ── 3. Options avancées (recommandées GB10) ───────────────────────────────────
 echo ""
-echo "[2.5/4] Téléchargement modèles embedding/reranker...
+echo "[2.5/4] Téléchargement modèles embedding/reranker..."
 bash "$(dirname "$0")/download_embeddings.sh"
-
-[3/4] Écriture des options avancées TRT-LLM..."
+echo "[3/4] Écriture des options avancées TRT-LLM..."
 cat > "${PROJECT_ROOT}/models/hf_models/extra-llm-api-config.yml" <<'YAML'
 # Options avancées TRT-LLM (backend PyTorch) — DGX Spark GB10 / NVFP4 MoE
 # cuda graphs : accélère fortement la génération token/token
 cuda_graph_config:
   enable_padding: true
   batch_sizes: [1, 2, 4, 8]
-# overlap scheduler : recouvre calcul et préparation
-enable_overlap_scheduler: true
 # MoE : backend adapté sm_121 (FP4 sur GB10 passe par des kernels dédiés)
 moe_config:
   backend: CUTLASS
