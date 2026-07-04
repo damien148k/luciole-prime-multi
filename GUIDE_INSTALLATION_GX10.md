@@ -531,7 +531,35 @@ Le watcher surveille automatiquement les changements (ajout/suppression) toutes 
 
 ---
 
-## 13. Gestion des instances
+## 13. Démarrage après reboot
+
+Après un redémarrage du GX10, Docker redémarre automatiquement mais le LLM partagé doit être relanceé manuellement car il nécessite un temps de warmup.
+
+```bash
+cd ~/Documents/luciole-prime-multi
+
+# 1. Démarrer le LLM partagé
+sudo docker compose \
+  -f docker-compose.shared-llm.yml \
+  -f docker-compose.shared-llm.gx10.yml \
+  up -d
+
+# 2. Surveiller le démarrage (jusqu'à 10 min)
+sudo docker logs -f luciole-tensorrt-shared
+# Attendre "Started HTTPService" puis Ctrl+C
+
+# 3. Démarrer chaque instance
+cd instances/<metier>
+sudo docker compose -f docker-compose.yml -f docker-compose.gx10.yml \
+  --project-name luciole-<metier> --profile gpu up -d
+```
+
+> Les containers d'instance (qdrant, opensearch, mail...) redémarrent automatiquement  
+> grâce à `restart: unless-stopped`. Seul le LLM partagé doit être relanceé manuellement.
+
+---
+
+## 14. Gestion des instances
 
 ### Lister les instances
 
