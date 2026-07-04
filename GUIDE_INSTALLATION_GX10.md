@@ -523,10 +523,11 @@ sudo docker compose \
 
 ```bash
 # Toujours stop + rm + up — ne pas utiliser --force-recreate seul (garde l'ancienne image)
+# IMPORTANT : toujours inclure --profile gpu sinon les services GPU démarrent sur un réseau séparé
 sudo docker stop luciole-agent-chavenay && sudo docker rm luciole-agent-chavenay
 cd instances/chavenay
 sudo docker compose -f docker-compose.yml -f docker-compose.gx10.yml \
-  --project-name luciole-chavenay up -d
+  --project-name luciole-chavenay --profile gpu up -d
 ```
 
 ### Mettre à jour le code (git pull + rebuild)
@@ -581,7 +582,10 @@ Pour forcer l'utilisation d'une nouvelle image :
 
 ```bash
 sudo docker stop <container> && sudo docker rm <container>
-# puis relancer avec docker compose up -d
+# puis relancer — TOUJOURS avec --profile gpu
+cd instances/<metier>
+sudo docker compose -f docker-compose.yml -f docker-compose.gx10.yml \
+  --project-name luciole-<metier> --profile gpu up -d
 ```
 
 ### Le LLM partagé répond `connection refused` depuis une instance
