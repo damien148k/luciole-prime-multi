@@ -93,14 +93,19 @@ services:
       - gpu
     depends_on:
       - agent
+      - qdrant
+      - opensearch
     environment:
       - TZ=${TZ:-Europe/Paris}
       - INSTANCE_NAME=${INSTANCE_NAME}
       - AGENT_URL=http://agent:8000
       - LLM_URL=http://tensorrt-llm-shared:8000
+      - QDRANT_URL=http://qdrant:6333
+      - OPENSEARCH_URL=http://opensearch:9200
       - HF_HUB_OFFLINE=1
       - TRANSFORMERS_OFFLINE=1
       - HF_HOME=/app/models/huggingface
+      - SENTENCE_TRANSFORMERS_HOME=/app/models/huggingface
     volumes:
       - ./config:/app/config
       - ./data:/app/data
