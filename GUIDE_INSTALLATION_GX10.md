@@ -546,7 +546,9 @@ sudo docker compose \
 
 # 2. Surveiller le démarrage (jusqu'à 10 min)
 sudo docker logs -f luciole-tensorrt-shared
-# Attendre "Started HTTPService" puis Ctrl+C
+# Attendre l'un de ces messages puis Ctrl+C :
+#   - "Started HTTPService"  (premier démarrage, avec warmup)
+#   - "Application startup complete" + réponses "GET /v1/models HTTP/1.1" 200 OK (démarrage rapide depuis cache)
 
 # 3. Démarrer chaque instance
 cd instances/<metier>
