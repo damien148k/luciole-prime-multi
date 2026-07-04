@@ -103,6 +103,7 @@ services:
       - HF_HOME=/app/models/huggingface
     volumes:
       - ./config:/app/config
+      - ./data:/app/data
       - ./models/huggingface:/app/models/huggingface
     ports:
       - 0.0.0.0:${ADMIN_PORT:-8080}:8080
