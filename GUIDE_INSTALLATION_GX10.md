@@ -11,17 +11,18 @@
 
 1. [Premier démarrage et mise à jour du GX10](#1-premier-démarrage-et-mise-à-jour-du-gx10)
 2. [Docker — permissions et groupe](#2-docker--permissions-et-groupe)
-3. [Compte NGC personnel et API Key](#3-compte-ngc-personnel-et-api-key)
-4. [Login Docker sur nvcr.io](#4-login-docker-sur-nvcrIo)
-5. [Cloner le repo luciole-prime-multi](#5-cloner-le-repo-luciole-prime-multi)
-6. [Téléchargement des embeddings (venv Python)](#6-téléchargement-des-embeddings-venv-python)
-7. [Téléchargement du modèle LLM (Qwen3-30B-A3B-NVFP4)](#7-téléchargement-du-modèle-llm-qwen3-30b-a3b-nvfp4)
-8. [Build de l'image Docker GPU arm64](#8-build-de-limage-docker-gpu-arm64)
-9. [Démarrage du stack LLM partagé](#9-démarrage-du-stack-llm-partagé)
-10. [Installation d'une instance métier](#10-installation-dune-instance-métier)
-11. [Vérification finale](#11-vérification-finale)
-12. [Gestion des instances](#12-gestion-des-instances)
-13. [Erreurs courantes et solutions](#13-erreurs-courantes-et-solutions)
+3. [NVIDIA Container Runtime — configuration Docker](#3-nvidia-container-runtime--configuration-docker)
+4. [Compte NGC personnel et API Key](#4-compte-ngc-personnel-et-api-key)
+5. [Login Docker sur nvcr.io](#5-login-docker-sur-nvcrIo)
+6. [Cloner le repo luciole-prime-multi](#6-cloner-le-repo-luciole-prime-multi)
+7. [Téléchargement des embeddings (venv Python)](#7-téléchargement-des-embeddings-venv-python)
+8. [Téléchargement du modèle LLM (Qwen3-30B-A3B-NVFP4)](#8-téléchargement-du-modèle-llm-qwen3-30b-a3b-nvfp4)
+9. [Build de l'image Docker GPU arm64](#9-build-de-limage-docker-gpu-arm64)
+10. [Démarrage du stack LLM partagé](#10-démarrage-du-stack-llm-partagé)
+11. [Installation d'une instance métier](#11-installation-dune-instance-métier)
+12. [Vérification finale](#12-vérification-finale)
+13. [Gestion des instances](#13-gestion-des-instances)
+14. [Erreurs courantes et solutions](#14-erreurs-courantes-et-solutions)
 
 ---
 
@@ -87,7 +88,59 @@ sudo systemctl restart docker
 
 ---
 
-## 3. Compte NGC personnel et API Key
+## 3. NVIDIA Container Runtime — configuration Docker
+
+### Problème rencontré
+
+```
+ImportError: libcuda.so.1: cannot open shared object file: No such file or directory
+```
+
+> **Cause** : le runtime Docker par défaut est `runc` au lieu de `nvidia`.  
+> `NVIDIA_VISIBLE_DEVICES=all` dans les variables d'environnement n'a aucun effet sans le runtime NVIDIA.  
+> `DeviceRequests: null` dans `docker inspect` confirme que le GPU n'est pas injecté.
+
+### Vérification
+
+```bash
+sudo docker info | grep -i runtime
+# Si "Default Runtime: runc" → appliquer la correction ci-dessous
+
+which nvidia-container-runtime
+# Doit retourner : /usr/bin/nvidia-container-runtime
+# (installé avec le NVIDIA Container Toolkit)
+```
+
+### Solution
+
+```bash
+# Créer le daemon.json Docker avec nvidia comme runtime par défaut
+sudo tee /etc/docker/daemon.json <<'EOF'
+{
+  "default-runtime": "nvidia",
+  "runtimes": {
+    "nvidia": {
+      "path": "nvidia-container-runtime",
+      "runtimeArgs": []
+    }
+  }
+}
+EOF
+
+# Redémarrer Docker
+sudo systemctl restart docker
+
+# Vérifier
+sudo docker info | grep -i runtime
+# Attendu : Default Runtime: nvidia
+```
+
+> **Note** : cette étape est **obligatoire avant tout `docker compose up`** impliquant le GPU.  
+> Sans elle, `NVIDIA_VISIBLE_DEVICES=all` est ignoré et `libcuda.so.1` est introuvable.
+
+---
+
+## 4. Compte NGC personnel et API Key
 
 ### Problème rencontré
 
@@ -565,18 +618,19 @@ bash -c 'echo > /dev/tcp/localhost/3025'
 ## Récapitulatif — Ordre d'installation
 
 ```
-1. sudo apt update && upgrade → reboot
-2. sudo usermod -aG docker $USER → newgrp docker
-3. Créer compte NGC personnel → générer API key
-4. sudo docker login nvcr.io --username '$oauthtoken'
-5. git clone luciole-prime-multi
-6. sudo bash scripts/prepare_gx10.sh    ← embeddings + CUTLASS config
-7. source ~/luciole-venv/bin/activate && bash scripts/download_model.sh  ← modèle LLM
-8. sudo docker build -f Dockerfile.gpu.arm64 -t luciole-gpu:arm64 .
-9. sudo docker compose -f docker-compose.shared-llm.yml -f docker-compose.shared-llm.gx10.yml up -d
-10. (attendre que tensorrt-shared soit healthy)
-11. sudo bash scripts/install_gx10.sh  ← première instance métier
-12. Vérification : docker ps, curl /health, ingestion document test
+1.  sudo apt update && upgrade → reboot
+2.  sudo usermod -aG docker $USER → newgrp docker
+3.  Configurer NVIDIA Container Runtime → sudo tee /etc/docker/daemon.json → sudo systemctl restart docker
+4.  Créer compte NGC personnel → générer API key
+5.  sudo docker login nvcr.io --username '$oauthtoken'
+6.  git clone luciole-prime-multi
+7.  sudo bash scripts/prepare_gx10.sh    ← embeddings + CUTLASS config
+8.  source ~/luciole-venv/bin/activate && bash scripts/download_model.sh  ← modèle LLM
+9.  sudo docker build -f Dockerfile.gpu.arm64 -t luciole-gpu:arm64 .
+10. sudo docker compose -f docker-compose.shared-llm.yml -f docker-compose.shared-llm.gx10.yml up -d
+11. (attendre que tensorrt-shared soit healthy)
+12. sudo bash scripts/install_gx10.sh  ← première instance métier
+13. Vérification : docker ps, curl /health, ingestion document test
 ```
 
 ---
