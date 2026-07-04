@@ -163,7 +163,7 @@ services:
       - MAIL_ATTACHMENTS_PATH=/app/feedbacks/mail_attachments
       - MAIL_ENCRYPTION_KEY=${MAIL_ENCRYPTION_KEY:-}
     volumes:
-      - ./config:/app/config:ro
+      - ./config:/app/config
       - ./feedbacks:/app/feedbacks
       - ./models/huggingface:/app/models/huggingface
     ports:
