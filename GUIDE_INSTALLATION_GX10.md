@@ -411,13 +411,13 @@ Le script :
 4. Génère `instances/<metier>/.env` avec tous les ports et la clé de chiffrement mail
 5. Lance le stack Docker de l'instance avec `--profile gpu`
 
-### Donner les droits sur le dossier data
+### Donner les droits sur le dossier de l'instance
 
-Le dossier `instances/<metier>/data/` est créé par Docker (root).  
-Il faut donner les droits à l'utilisateur pour pouvoir y déposer des documents :
+Tous les sous-dossiers de l'instance sont créés par Docker (root).  
+Il faut donner les droits à l'utilisateur pour pouvoir y déposer des documents et écrire dans les configs :
 
 ```bash
-sudo chown -R dam:dam ~/Documents/luciole-prime-multi/instances/<metier>/data/
+sudo chown -R dam:dam ~/Documents/luciole-prime-multi/instances/<metier>/
 ```
 
 ### Installer une deuxième instance
@@ -671,10 +671,10 @@ curl -s -X POST http://localhost:${MAIL_ADMIN_PORT}/api/user \
   -d '{"email":"luciole@luciole.local","login":"luciole","password":"luciole"}'
 ```
 
-### Permission refusée sur `instances/<metier>/data/`
+### Permission refusée sur `instances/<metier>/`
 
 ```bash
-sudo chown -R dam:dam ~/Documents/luciole-prime-multi/instances/<metier>/data/
+sudo chown -R dam:dam ~/Documents/luciole-prime-multi/instances/<metier>/
 ```
 
 ---
