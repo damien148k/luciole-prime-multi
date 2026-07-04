@@ -46,13 +46,17 @@ cat /etc/os-release
 
 Pour travailler depuis un PC Windows/Mac sans être physiquement sur le GX10 :
 
+**Sur le GX10** — activer SSH :
 ```bash
-# Sur le GX10 — activer SSH
 sudo systemctl enable ssh --now
-
-# Depuis le PC distant (PowerShell / Terminal)
-ssh dam@<IP_GX10>
 ```
+
+**Depuis le PC distant** (PowerShell / Terminal Windows) :
+```powershell
+ssh dam@192.168.1.14
+```
+
+> Ne pas copier-coller les deux blocs en même temps — ils s'exécutent sur des machines différentes.
 
 Trouver l'IP du GX10 :
 
