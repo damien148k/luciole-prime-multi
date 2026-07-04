@@ -71,7 +71,7 @@ services:
     volumes:
       - ./config:/app/config:ro
       - ./data:/app/data:ro
-      - ./models/huggingface:/app/models/huggingface
+      - ${HF_MODELS_PATH:-./models/huggingface}:/app/models/huggingface
       - ./evaluation:/app/evaluation
     ports:
       - 0.0.0.0:${API_PORT:-8000}:8000
@@ -104,7 +104,7 @@ services:
     volumes:
       - ./config:/app/config
       - ./data:/app/data
-      - ./models/huggingface:/app/models/huggingface
+      - ${HF_MODELS_PATH:-./models/huggingface}:/app/models/huggingface
     ports:
       - 0.0.0.0:${ADMIN_PORT:-8080}:8080
     restart: unless-stopped
@@ -166,7 +166,7 @@ services:
     volumes:
       - ./config:/app/config
       - ./feedbacks:/app/feedbacks
-      - ./models/huggingface:/app/models/huggingface
+      - ${HF_MODELS_PATH:-./models/huggingface}:/app/models/huggingface
     ports:
       - 0.0.0.0:${FEEDBACK_PORT:-8503}:8503
     restart: unless-stopped
@@ -214,7 +214,7 @@ services:
       - ./config:/app/config:ro
       - ./data:/app/data:ro
       - ./backups:/app/backups
-      - ./models/huggingface:/app/models/huggingface
+      - ${HF_MODELS_PATH:-./models/huggingface}:/app/models/huggingface
     ports:
       - 127.0.0.1:${WATCHER_PORT:-8090}:8090
     restart: unless-stopped
