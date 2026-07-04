@@ -511,14 +511,19 @@ Configurer aussi IMAP/SMTP dans l'UI Feedback → Settings mail (même valeurs, 
 Déposer les documents dans le dossier de l'instance :
 
 ```bash
-# Le dossier doit porter le même nom que l'instance (INSTANCE_NAME)
+# ⚠️  RÈGLE CRITIQUE : le sous-dossier doit porter EXACTEMENT le même nom que l'instance
+# Exemple pour l'instance "support" : instances/support/data/support/
+# Exemple pour l'instance "juridique" : instances/juridique/data/juridique/
 mkdir -p ~/Documents/luciole-prime-multi/instances/<metier>/data/<metier>/
 cp /path/to/documents/*.pdf \
    ~/Documents/luciole-prime-multi/instances/<metier>/data/<metier>/
 ```
 
-> **Important** : le nom du sous-dossier doit être identique au nom du métier (ex: `support/data/support/`).  
-> C'est ce nom qui détermine l'index Qdrant utilisé par l'agent.
+> **Pourquoi** : le nom du sous-dossier détermine l'index Qdrant. Si le nom ne correspond pas à `INSTANCE_NAME`,  
+> l'agent ne trouvera aucun résultat (0 vecteurs) et le watcher ne surveillera pas le bon chemin.
+>
+> ❌ `instances/support/data/chavenay/` → index `chavenay` — l'agent cherche `support` → 0 résultats  
+> ✅ `instances/support/data/support/` → index `support` — correct
 
 Depuis l'UI Admin, lancer l'ingestion avec le chemin `/app/data/<metier>`.
 
