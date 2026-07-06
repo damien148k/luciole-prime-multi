@@ -3127,14 +3127,14 @@ async def config_page():
             // Préremplissage avec les valeurs luciole-mail (Greenmail LAN)
             // Ports internes Greenmail : SMTP=3025, IMAP=3143 (dans le réseau Docker)
             document.getElementById('mpEnabled').checked   = true;
-            document.getElementById('mpImapHost').value    = 'luciole-mail-watcher';
+            document.getElementById('mpImapHost').value    = 'luciole-mail';
             document.getElementById('mpImapPort').value    = '3143';
             document.getElementById('mpImapSsl').value     = 'false';
             document.getElementById('mpImapUser').value    = 'luciole@local.lan';
             document.getElementById('mpImapPass').value    = 'luciole2024';
             document.getElementById('mpImapFolder').value  = 'INBOX';
             document.getElementById('mpPoll').value        = '60';
-            document.getElementById('mpSmtpHost').value    = 'luciole-mail-watcher';
+            document.getElementById('mpSmtpHost').value    = 'luciole-mail';
             document.getElementById('mpSmtpPort').value    = '3025';
             document.getElementById('mpSmtpTls').value     = 'false';
             document.getElementById('mpSmtpUser').value    = 'luciole@local.lan';
